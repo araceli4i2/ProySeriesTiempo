@@ -57,16 +57,61 @@ El dashboard implementa fielmente el sistema de diseño **GitHub Dark Primer**:
 - **Ramas Git Destino:** Predominancia de `refs/heads/main` y `refs/heads/master`.
 - **Profundidad de Discusión:** Comentarios por incidencia y desglose de acciones en Pull Requests.
 
-### 5. Capítulo 6 — Modelos ARIMA (31 días de Enero 2024, 12:00 UTC)
-- **Serie Temporal Diaria:** Trayectoria observada de los 31 días a las 12:00 UTC con marcado del punto muestral (15 de enero: 286,864 eventos).
-- **Pronóstico Estocástico:** Proyección a horizonte interactivo $h = 1 \dots 14$ días futuros (Febrero 2024) con banda sombreada de Intervalo de Confianza al 95%.
-- **Pruebas Estadísticas:**
-  - *Dickey-Fuller Aumentada (ADF):* No estacionaria en niveles ($t_\gamma = -2.15, p = 0.228$) y Estacionaria en 1ra diferencia ($t_\gamma = -5.87, p = 0.00002$).
-  - *Ljung-Box:* $Q(10) = 7.84, p = 0.644$ (Residuos sin autocorrelación significativa, ruido blanco validado).
-  - *Métricas de Calidad:* MAE = 6,840.5, RMSE = 8,920.2, MAPE = 2.74%, $R^2 = 0.951$.
-- **Correlogramas Gemelos:** Gráficos de ACF y PACF para 15 rezagos con bandas de significancia $\pm 1.96/\sqrt{N}$.
-- **Comparativa de Modelos Candidatos:** Tabla con AIC, BIC y verosimilitud (confirmando ARIMA(1,1,1) como el más parsimonioso).
-- **Importador de Datos Dinámicos:** Modal para cargar archivos `.csv` o `.json` personalizados, con opción de descarga de plantilla (`sample_gh_archive_january2024.csv`) o restablecimiento a valores iniciales.
+### 5. Capítulo 6 — Modelos SARIMA (Metodología Box-Jenkins)
+Implementación integral y rigurosa del protocolo clásico de Box-Jenkins para series de tiempo con componente estacional semanal ($s=7$), basada en la pipeline metodológica de `DAT262_Proyecto_SARIMA_Diario_Corregido.ipynb`:
+
+- **Flujo de Datos Arquitectónico:**
+  `scripts/export_sarima.py` $\longrightarrow$ `data/sarima_results.json` $\longrightarrow$ `js/views/sarima.js` (fetch dinámico en el cliente).
+- **Etapa 1: Identificación**
+  - **Serie Temporal Interactiva:** Vista en escala natural o logarítmica con demarcación visual de partición train/test ($H=14$ días), crosshair interactivo con día de la semana y zoom de rango.
+  - **Descomposición STL Sincronizada:** Paneles coordinados de Tendencia ($T_t$), Estacionalidad ($S_t$) y Residuo ($R_t$). Gauge de Fuerza Estacional $F_s = \max(0, 1 - \frac{\mathrm{Var}(R)}{\mathrm{Var}(S+R)})$ con umbral crítico $0.64$ ($D=1$).
+  - **Perfil Semanal:** Desglose del factor de estacionalidad por día (Lunes a Domingo) resaltando fines de semana.
+  - **Pipeline de Estacionariedad:** Selector multi-etapa (Niveles log $\to$ Dif. estacional $\to$ Dif. estacional + regular) con pruebas formales ADF y KPSS en paralelo.
+  - **Correlogramas Gemelos (ACF / PACF a 35 rezagos):** Bandas de Bartlett $\pm 1.96/\sqrt{N}$, con resaltado estacional en rezagos $7, 14, 21, 28, 35$ y líneas punteadas de referencia.
+- **Etapa 2: Estimación**
+  - **Explorador de Grilla (72 modelos):** Combinaciones $(p,d,q) \times (P,D,Q)_s$ con tendencia $c$ o $n$. Tabla ordenable con filtros por convergencia, warnings, tendencia y diagnóstico.
+  - **Mapa de Calor AIC:** Matriz bidimensional $(p,q)$ parametrizable por $(P,Q)$ y tendencia con marcado del mínimo global.
+  - **Inspección de Candidatos:** Clic en cualquiera de los Top 10 modelos recalcula y actualiza instantáneamente los paneles de diagnóstico y pronóstico.
+- **Etapa 3: Diagnóstico Iterativo**
+  - **Verificación de Residuos:** Descarte de los primeros $d + D \cdot s$ residuos de inicialización (`burn`).
+  - **Panel 2×2 de Residuos:** Serie en el tiempo, ACF de residuos, histograma con curva normal teórica y gráfico Q-Q normal con recta identidad.
+  - **Tarjetas de Pruebas Formales:** Ljung-Box en rezagos 14 y 21 con grados de libertad corregidos $gl = m - (p+q+P+Q)$, prueba Jarque-Bera de normalidad y prueba de heterocedasticidad.
+  - **Detección de Sobrediferenciación:** Alerta automática si algún coeficiente $\Theta_Q$ o $\theta_q$ se acerca a las raíces unitarias ($< -0.95$).
+- **Etapa 4: Pronóstico y Validación**
+  - **Gráfico de Validación Out-of-Sample:** Trayectoria observada vs pronóstico SARIMA con banda de Intervalo de Predicción al 95% y benchmark Naive Estacional ($y_{t-7}$).
+  - **Evaluación de Errores & Métricas:** MAE, RMSE, MAPE y MASE (referenciado al error in-sample del naive estacional), con indicador de cobertura empírica de la banda de predicción.
+  - **Proyección Futura:** Horizonte interactivo $h \in [1, 14]$ días con tabla detallada de valores esperados e intervalos.
+  - **Importador de Datos Externos:** Soporte para CSV y JSON con cálculo en cliente de transformaciones, diferenciaciones y ACF/PACF, junto con instrucciones para reestimación completa en Python.
+
+---
+
+## 🔬 Cómo Regenerar los Resultados SARIMA
+
+Para reentrenar la grilla Box-Jenkins y reexportar los datos estructurados a `data/sarima_results.json`, utiliza el pipeline en `scripts/export_sarima.py`:
+
+### Requisitos previos (Python 3.9+)
+```bash
+pip install pandas numpy statsmodels scikit-learn scipy requests
+```
+
+### Ejecución estándar (genera 120 días con simulación realista de estacionalidad semanal):
+```bash
+python scripts/export_sarima.py
+```
+
+### Reestimación con archivo CSV propio o fechas específicas:
+```bash
+python scripts/export_sarima.py --csv sample_gh_archive_january2024.csv --start 2024-01-01 --end 2024-04-30
+```
+
+### Opciones de la línea de comandos:
+- `--csv <ruta>`: Ruta a un archivo CSV con columnas `date,events` (o `timestamp,count`).
+- `--source {gharchive,simulated}`: Fuerza el origen de datos en los metadatos exportados.
+- `--start <YYYY-MM-DD>`: Fecha de inicio de la serie temporal diaria.
+- `--end <YYYY-MM-DD>`: Fecha de fin de la serie temporal diaria.
+- `--h <int>`: Horizonte de predicción y tamaño del conjunto de test (por defecto: 14 días).
+- `--alpha <float>`: Nivel de significancia para los intervalos de predicción (por defecto: 0.05 para 95% de confianza).
+- `--output <ruta>`: Ruta de destino (por defecto: `data/sarima_results.json`).
 
 ---
 
