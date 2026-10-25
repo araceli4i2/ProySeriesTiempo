@@ -7,6 +7,114 @@
 
 const { useState, useEffect, useMemo, useRef } = React;
 
+// --- QR Code Modal Component ---
+function QRModal({ onClose }) {
+  const networkUrl = window.NETWORK_URL || window.location.origin;
+  const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&color=58a6ff&bgcolor=0d1117&data=${encodeURIComponent(networkUrl)}`;
+  const [copied, setCopied] = useState(false);
+
+  const copyUrl = () => {
+    navigator.clipboard.writeText(networkUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div
+      className="gh-modal-backdrop"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Compartir QR"
+    >
+      <div
+        style={{
+          background: 'var(--canvas-subtle)',
+          border: '1px solid var(--border-default)',
+          borderRadius: '12px',
+          padding: '28px 24px 24px',
+          width: '300px',
+          maxWidth: '90vw',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.8)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '16px',
+          position: 'relative',
+        }}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          style={{
+            position: 'absolute', top: '12px', right: '12px',
+            background: 'transparent', border: 'none',
+            color: 'var(--fg-muted)', cursor: 'pointer', fontSize: '18px', lineHeight: 1,
+          }}
+          aria-label="Cerrar"
+        >✕</button>
+
+        {/* Title */}
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--fg-default)', marginBottom: '2px' }}>
+            📱 Escanear para abrir el Dashboard
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--fg-muted)' }}>
+            Misma red Wi-Fi requerida
+          </div>
+        </div>
+
+        {/* QR Image */}
+        <div
+          style={{
+            padding: '10px',
+            background: '#0d1117',
+            border: '2px solid var(--accent-blue)',
+            borderRadius: '10px',
+            boxShadow: '0 0 24px rgba(88,166,255,0.25)',
+          }}
+        >
+          <img
+            src={qrApiUrl}
+            alt="QR Code"
+            width={220}
+            height={220}
+            style={{ display: 'block', borderRadius: '4px' }}
+          />
+        </div>
+
+        {/* Network URL + copy button */}
+        <div style={{ width: '100%' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '6px',
+            background: 'var(--canvas-inset, #010409)',
+            border: '1px solid var(--border-default)',
+            borderRadius: '6px', padding: '6px 10px',
+          }}>
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: '11px',
+              color: 'var(--accent-blue)', flex: 1, wordBreak: 'break-all',
+            }}>
+              {networkUrl}
+            </span>
+            <button
+              onClick={copyUrl}
+              className="gh-btn gh-btn-sm"
+              style={{ flexShrink: 0, fontSize: '11px', padding: '3px 8px' }}
+              title="Copiar URL"
+            >
+              {copied ? '✓' : '⎘'}
+            </button>
+          </div>
+          <div style={{ fontSize: '10px', color: 'var(--fg-subtle)', marginTop: '6px', textAlign: 'center' }}>
+            El celular debe estar en la misma red Wi-Fi que esta computadora
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- Helper KaTeX Formula Component ---
 function MathFormula({ math, block = false, className = "" }) {
   const containerRef = useRef(null);
@@ -165,6 +273,7 @@ function Icon({ name, className = "w-4 h-4", color = "currentColor" }) {
 // --- Top Header Component (GitHub Repository Bar) ---
 function Header({ activeTab, setActiveTab, data }) {
   const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
 
   const copyCloneCmd = () => {
     navigator.clipboard.writeText("git clone https://github.com/UMSA-DAT262/gh-archive-stochastic-dashboard.git");
@@ -179,6 +288,7 @@ function Header({ activeTab, setActiveTab, data }) {
 
   return (
     <header className="border-b border-ghBorder bg-ghSurface">
+      {showQR && <QRModal onClose={() => setShowQR(false)} />}
       {/* Upper Repository Breadcrumb & Actions */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -225,6 +335,25 @@ function Header({ activeTab, setActiveTab, data }) {
             <button onClick={copyCloneCmd} className="gh-btn gh-btn-sm gh-btn-primary" title="Copy git clone URL">
               <Icon name={copied ? "check" : "commit"} className="w-3.5 h-3.5" />
               <span>{copied ? "¡Copiado!" : "Code"}</span>
+            </button>
+            {/* QR Share Button */}
+            <button
+              onClick={() => setShowQR(true)}
+              className="gh-btn gh-btn-sm gh-btn-blue"
+              title="Compartir via QR"
+              aria-label="Código QR"
+              id="btn-qr-share"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1"/>
+                <rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="3" y="14" width="7" height="7" rx="1"/>
+                <rect x="14" y="14" width="3" height="3"/>
+                <rect x="18" y="18" width="3" height="3"/>
+                <rect x="14" y="18" width="3" height="1"/>
+                <rect x="18" y="14" width="1" height="3"/>
+              </svg>
+              <span>QR</span>
             </button>
           </div>
         </div>
